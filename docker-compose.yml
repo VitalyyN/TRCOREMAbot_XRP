@@ -1,0 +1,16 @@
+services:
+  trading-bot:
+    build: .
+    container_name: trading-bot
+    restart: unless-stopped
+    volumes:
+      - ./.env:/app/.env           # Монтируем .env с хоста
+      - ./settings.py:/app/settings.py  # Монтируем settings.py с хоста
+      - ./logs:/app/logs           # Директория для логов
+    environment:
+      - TZ=Europe/Moscow           # Опционально: временная зона
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
