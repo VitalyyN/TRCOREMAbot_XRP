@@ -1,6 +1,7 @@
 import os
 from typing import List, Literal, Tuple
 import math
+from decimal import Decimal, ROUND_DOWN
 from dotenv import load_dotenv
 import pandas as pd
 from ta.trend import EMAIndicator
@@ -199,13 +200,16 @@ def place_limit_best(side: str, qty: float, symbol: str):
         get_symbol_specs(symbol)
 
     specs = SYMBOL_SPECS[symbol]
-    tick = specs["tick_size"]
+    tick_dec = Decimal(str(specs["tick_size"]))
+    qty_step_dec = Decimal(str(specs["qty_step"]))
 
     best_bid, best_ask = best_bid_ask(symbol)
 
-    raw_price = best_bid + tick if side == "Buy" else best_ask - tick
-    steps = round(raw_price / tick)
-    final_price = steps * tick
+    raw_price_dec = (Decimal(str(best_bid)) + tick_dec) if side == "Buy" else (Decimal(str(best_ask)) - tick_dec)
+    steps = (raw_price_dec / tick_dec).to_integral_value(rounding=ROUND_DOWN)
+    final_price_dec = steps * tick_dec
+
+    qty_dec = Decimal(str(qty)).quantize(qty_step_dec, rounding=ROUND_DOWN)
 
     try:
         resp = session.place_order(
@@ -213,8 +217,8 @@ def place_limit_best(side: str, qty: float, symbol: str):
                     symbol=symbol,
                     side=side.capitalize(),
                     orderType="Limit",
-                    qty=qty,
-                    price=str(final_price),
+                    qty=str(qty_dec),
+                    price=str(final_price_dec),
                     reduceOnly=False,
                 )
         
@@ -272,18 +276,17 @@ def calc_order_qty(symbol: str, portion: float) -> float:
         get_symbol_specs(symbol)
 
     specs = SYMBOL_SPECS[symbol]
-    min_qty = specs["min_qty"]
-    qty_step = specs["qty_step"]
+    min_qty_dec = Decimal(str(specs["min_qty"]))
+    qty_step_dec = Decimal(str(specs["qty_step"]))
 
     balance = get_balance()
     price = latest_price(symbol)
-    raw_qty = balance * portion / price
+    raw_qty_dec = (Decimal(str(balance)) * Decimal(str(portion))) / Decimal(str(price))
 
-    # округляем вниз до кратного qty_step
-    steps = math.floor(raw_qty / qty_step)
-    final_qty = steps * qty_step
+    steps = (raw_qty_dec / qty_step_dec).to_integral_value(rounding=ROUND_DOWN)
+    final_qty_dec = steps * qty_step_dec
 
-    if final_qty < min_qty:
-        raise ValueError(f"Объем ({final_qty}) меньше минимального ({min_qty})")
+    if final_qty_dec < min_qty_dec:
+        raise ValueError(f"Объем ({final_qty_dec}) меньше минимального ({min_qty_dec})")
 
-    return round(final_qty, 6)
+    return float(final_qty_dec)
